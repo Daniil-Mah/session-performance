@@ -168,7 +168,7 @@ def create_test():
     
     Teacher.create(user=teacher_user1, discipline=math)
     Teacher.create(user=teacher_user2, discipline=russian)
-
+    
     Grade.create(
         student=profile1,
         discipline=math,

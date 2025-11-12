@@ -15,6 +15,9 @@ class TeacherInfo(BaseModel):
     name: str
     password: str
 
+class UserRegister(BaseModel):
+    name: str
+    password: str
 
 class UserInfo(BaseModel):
     name: str
@@ -25,6 +28,10 @@ class UserInfo(BaseModel):
 class InfoStudentResponse(UserInfo):
     group: str
 
+class StudentprofileCreate(BaseModel):
+    username: str
+    group: str
+    full_name: str
 
 class GradePutRequest(BaseModel):
     student_full_name: str

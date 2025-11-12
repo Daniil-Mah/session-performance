@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from models import *
 from database.db import User, Role, db, Disciplines, Group, Grade, StudentProfile, SessionPeriod, Teacher, Admin
-from backend.dependencies.auth_utils import create_jwt_token
+from dependencies.auth_utils import create_jwt_token
 from config import settings
 from dependencies.current_user import get_current_active_user
 
@@ -13,7 +13,7 @@ app = FastAPI()
 
 
 @app.post("/register/",tags=["system"])
-async def create_user(user: UserInfo):
+async def create_user(user: UserRegister):
     try:
         with db:
             student_role = Role.get(Role.name == 'Студент')
@@ -36,9 +36,7 @@ async def create_user(user: UserInfo):
 
 
 @app.post("/add_teacher/", response_model=Dict[str, str], tags=["Админ"])
-async def add_teacher(
-    teacher: TeacherInfo,
-    current_user: Annotated[User, Depends(get_current_active_user)]) -> Dict[str, str]:
+async def add_teacher(teacher: TeacherInfo, current_user: Annotated[User, Depends(get_current_active_user)]) -> Dict[str, str]:
     try:
         with db:
             if current_user.role.name != "Сотрудник учебного отдела":
@@ -68,92 +66,243 @@ async def add_teacher(
             detail=f"Произошла ошибка: {exc}") from exc
 
 
-@app.post("/fill_discipline/", tags=["Админ"])
-async def fill_name_discipline(name_disciplines: List[str], current_user: Annotated[User, Depends(get_current_active_user)]):
-    if name_disciplines:
+@app.post("/create-group/", tags=["Админ"])
+async def create_group(current_user: Annotated[User, Depends(get_current_active_user)],group_name: str):
+    try:
         with db:
-            if current_user.role.name == "Сотрудник учебного отдела":
-                for discipline in name_disciplines:
-                    dis = Disciplines(name=discipline)
-                    dis.save()
-            else:
+            if current_user.role.name != "Сотрудник учебного отдела":
                 raise HTTPException(
                     status_code=403,
-                    detail=f"У вас нет прав (("
+                    detail="У вас недостаточно прав"
                 )
-    else:
+            
+            if not group_name.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Название группы не может быть пустым"
+                )
+            
+            Group.create(name=group_name)
+            return {"message":f"Группа {group_name} была успешна создана"}
+    except peewee.IntegrityError as exc:
         raise HTTPException(
             status_code=400,
-            detail="Пожалуйста введите хотябы одну дисциплину"
-        )
+            detail="Группа с таким названием уже существует"
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла ошибка при создании группы"
+        ) from exc
 
+
+@app.post("/create-studentprofile/", tags=["Админ"])
+async def create_studentprofile(current_user: Annotated[User, Depends(get_current_active_user)], student_profile: StudentprofileCreate):
+    try:
+        with db:
+            if current_user.role.name != "Сотрудник учебного отдела":
+                raise HTTPException(
+                    status_code=403,
+                    detail="У вас недостаточно прав"
+                )
+            
+            try:
+                student = User.get(User.username == student_profile.username)
+            except User.DoesNotExist:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Студент с именем {student_profile.username} не найден"
+                )
+            
+            try:
+                group = Group.get(Group.name == student_profile.group)
+            except Group.DoesNotExist:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Группа {student_profile.group} не найдена"
+                )
+            
+            if student.role.name != "Студент":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Пользователь не является студентом"
+                )
+            
+            StudentProfile.create(user=student,group=group, full_name=student_profile.full_name)
+            return {"message":"Профиль студента успешно создан"}
+    except peewee.IntegrityError as exc:
+        raise HTTPException(status_code=400,
+            detail="Профиль для этого студента уже существует"
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла ошибка при создании профиля студента"
+        ) from exc
+
+        
+@app.post("/fill_discipline/", tags=["Админ"])
+async def fill_name_discipline(name_disciplines: List[str], current_user: Annotated[User, Depends(get_current_active_user)]):
+    try:
+        if not name_disciplines:
+            raise HTTPException(
+                status_code=400,
+                detail="Пожалуйста введите хотябы одну дисциплину"
+            )
+        
+        with db:
+            if current_user.role.name != "Сотрудник учебного отдела":
+                raise HTTPException(
+                    status_code=403,
+                    detail="У вас нет прав((("
+                )
+            
+            created_count = 0
+            for discipline in name_disciplines:
+                dis = Disciplines(name=discipline.strip())
+                dis.save()
+                created_count += 1
+            return {
+                "message": f"Успешно создано {created_count} дисциплин",
+                "created_count": created_count
+            }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла ошибка при добавлении дисциплин"
+        ) from exc
 
 @app.patch("/put_grade",tags=["Админ/учитель"])
 async def put_grade(current_user: Annotated[User,Depends(get_current_active_user)],grade_put: GradePutRequest):
+    try:
+        with db:
+            if current_user.role.name == "Преподаватель":
+                try:
+                    student = StudentProfile.get(StudentProfile.full_name == grade_put.student_full_name)
+                    discipline = Disciplines.get(Disciplines.name == grade_put.discipline)
+                    session = SessionPeriod.get(SessionPeriod.name_session == grade_put.session)
+                    teacher = Teacher.get(
+                    (Teacher.user == current_user) &  
+                    (Teacher.discipline == discipline))
+                except (StudentProfile.DoesNotExist, Disciplines.DoesNotExist, SessionPeriod.DoesNotExist, Teacher.DoesNotExist):
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Студент, дисциплина, сессия или преподаватель не найдены"
+                    )
+                grade, created = Grade.get_or_create(
+                student=student,
+                discipline=discipline,
+                session=session,
+                defaults={
+                    'grade': grade_put.grade,
+                    'teacher': teacher.user
+                })
+                
+                if not created:
+                    grade.grade = grade_put.grade
+                    grade.teacher = teacher.user
+                    grade.save()
+                return {
+                    "message": "Оценка создана" if created else "Оценка обновлена",
+                    "student": student.full_name,
+                    "discipline": discipline.name, 
+                    "grade": grade_put.grade
+                    }
+            
+            elif current_user.role.name == "Сотрудник учебного отдела":
+                try:
+                    student = StudentProfile.get(StudentProfile.full_name == grade_put.student_full_name)
+                    discipline = Disciplines.get(Disciplines.name == grade_put.discipline)
+                    session = SessionPeriod.get(SessionPeriod.name_session == grade_put.session)
+                    admin = Admin.get(Admin.name == current_user)
+                except (StudentProfile.DoesNotExist, Disciplines.DoesNotExist, SessionPeriod.DoesNotExist, Admin.DoesNotExist):
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Студент, дисциплина, сессия или администратор не найдены"
+                    )
+                    
+                    
+                grade, created = Grade.get_or_create(
+                student=student,
+                discipline=discipline,
+                session=session,
+                defaults={
+                    'grade': grade_put.grade,
+                    'teacher': admin.name
+                })
+                
+                if not created:
+                    grade.grade = grade_put.grade
+                    grade.teacher = admin.name
+                    grade.save()
+                    return {
+                        "message": "Оценка создана" if created else "Оценка обновлена",
+                        "student": student.full_name,
+                        "discipline": discipline.name, 
+                        "grade": grade_put.grade
+                        }
+            
+            else:
+                raise HTTPException(
+                status_code=403,
+                detail="У вас нет прав"  
+                    )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла ошибка при сохранении оценки"
+        ) from exc
+
+
+@app.get("/administrator/all_grades/", tags={"Админ"})
+async def grades_all_group(current_user: Annotated[User, Depends(get_current_active_user)]):
     with db:
-        if current_user.role.name == "Преподаватель":
-            student = StudentProfile.get(StudentProfile.full_name == grade_put.student_full_name)
-            discipline = Disciplines.get(Disciplines.name == grade_put.discipline)
-            session = SessionPeriod.get(SessionPeriod.name_session == grade_put.session)
-            teacher = Teacher.get(
-            (Teacher.user == current_user) &  
-            (Teacher.discipline == discipline))
-            grade, created = Grade.get_or_create(
-            student=student,
-            discipline=discipline,
-            session=session,
-            defaults={
-                'grade': grade_put.grade,
-                'teacher': teacher.user
-            })
-            
-            if not created:
-                grade.grade = grade_put.grade
-                grade.teacher = teacher.user
-                grade.save()
-            return {
-                "message": "Оценка создана" if created else "Оценка обновлена",
-                "student": student.full_name,
-                "discipline": discipline.name, 
-                "grade": grade_put.grade
-                }
-        
         if current_user.role.name == "Сотрудник учебного отдела":
-            student = StudentProfile.get(StudentProfile.full_name == grade_put.student_full_name)
-            discipline = Disciplines.get(Disciplines.name == grade_put.discipline)
-            session = SessionPeriod.get(SessionPeriod.name_session == grade_put.session)
-            admin = Admin.get(Admin.name == current_user)
-            grade, created = Grade.get_or_create(
-            student=student,
-            discipline=discipline,
-            session=session,
-            defaults={
-                'grade': grade_put.grade,
-                'teacher': admin.name
-            })
-            
-            if not created:
-                grade.grade = grade_put.grade
-                grade.teacher = admin.name
-                grade.save()
-            return {
-                "message": "Оценка создана" if created else "Оценка обновлена",
-                "student": student.full_name,
-                "discipline": discipline.name, 
-                "grade": grade_put.grade
-                }
-        
-        else:
-            raise HTTPException(
-              status_code=403,
-              detail=f"У вас нет прав (("  
-            )
+            answer = []
+            groups = Group.select()
+            for group in groups:
+                students = StudentProfile.select().join(Group).where(Group.name == group.name)
+                student_grades = dict()
+                student_grades["Группа"] = group.name
+                student_grades["Информация"] = []
+                for student in students:
+                    grades = Grade.select().where(Grade.student == student)
+                    indo_student = dict()
+                    indo_student["Студент"] = student.full_name
+                    indo_student["Оценки"] = []
+                    for grade in grades:
+                        grade_student = dict()
+                        grade_student["Дисциплина"] = grade.discipline.name
+                        grade_student["Оценка"] = grade.grade
+                        indo_student["Оценки"].append(grade_student)
+                    student_grades["Информация"].append(indo_student)
+                answer.append(student_grades)
+            return answer
+
 
 @app.get("/administator/grades/{group_name}", tags=["Админ"],)
 async def grade_group(current_user: Annotated[User,Depends(get_current_active_user)], group_name: str):
-    with db:
-        if current_user.role.name == "Сотрудник учебного отдела":
+    try:
+        with db:
+            if current_user.role.name != "Сотрудник учебного отдела":
+                raise HTTPException(
+                    status_code=403,
+                    detail="У вас нет прав для просмотра оценок группы"
+                )
+            
+            try:
+                group = Group.get(Group.name == group_name)
+            except Group.DoesNotExist:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Группа {group_name} не найдена"
+                )
+            
             students = StudentProfile.select().join(Group).where(Group.name == group_name)
+            
+            if not students:
+                return {"message": "В группе нет студентов"}
+            
             answer = []
             for student in students:
                 grades = Grade.select().where(Grade.student == student)
@@ -164,9 +313,17 @@ async def grade_group(current_user: Annotated[User,Depends(get_current_active_us
                     grade_student = dict()
                     grade_student["Дисциплина"] = grade.discipline.name
                     grade_student["Оценка"] = grade.grade
+                    grade_student["Преподаватель"] = grade.teacher.username
+                    grade_student["Дата"] = grade.created_at
                     indo_student["Оценки"].append(grade_student)
                 answer.append(indo_student)
             return answer
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла ошибка при получении оценок группы"
+        ) from exc
+
 
 @app.get("/teacher/grades/{group_name}",tags=["Учитель"])
 async def grade_group(current_user: Annotated[User,Depends(get_current_active_user)],group_name: str):
@@ -200,6 +357,7 @@ async def grade_group(current_user: Annotated[User,Depends(get_current_active_us
                 status_code=401,
                 detail="Вы кто?"
             )
+
 
 @app.patch("/teacher/mass-grades/{group_name}", tags=["Учитель"])        
 async def put_mass_grades_group(current_user: Annotated[User,Depends(get_current_active_user)], mpg: MassPutGrades):
@@ -242,7 +400,8 @@ async def put_mass_grades_group(current_user: Annotated[User,Depends(get_current
             status_code=400,
             detail="Количество оценок должна быть равно количеству студентов"
         )
-            
+
+
 @app.get("/my_grades", tags=["Студент"])
 async def get_grades(current_user: Annotated[User,Depends(get_current_active_user)]):
     with db:
