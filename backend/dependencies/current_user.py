@@ -11,8 +11,5 @@ async def get_current_user(token: Annotated[str, Depends(OAUTH2_SCHEME)]) -> Use
 
 
 async def get_current_active_user(
-    current_user: Annotated[
-        User,
-        Depends(get_current_user)
-        ]) -> User:
+    current_user: Annotated[User, Depends(get_current_user)]) -> User:
     return current_user

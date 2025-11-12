@@ -167,7 +167,6 @@ async def grade_group(current_user: Annotated[User,Depends(get_current_active_us
                     indo_student["Оценки"].append(grade_student)
                 answer.append(indo_student)
             return answer
-        
 
 @app.get("/teacher/grades/{group_name}",tags=["Учитель"])
 async def grade_group(current_user: Annotated[User,Depends(get_current_active_user)],group_name: str):
@@ -202,14 +201,12 @@ async def grade_group(current_user: Annotated[User,Depends(get_current_active_us
                 detail="Вы кто?"
             )
 
-
 @app.patch("/teacher/mass-grades/{group_name}", tags=["Учитель"])        
 async def put_mass_grades_group(current_user: Annotated[User,Depends(get_current_active_user)], mpg: MassPutGrades):
     if len(mpg.students) == len(mpg.grades):
         with db:
             answer = []
             if current_user.role.name == "Преподаватель":
-                
                 teacher = Teacher.get(Teacher.user == current_user)
                 discipline = teacher.discipline
                 current_session = SessionPeriod.get(SessionPeriod.is_active == True)
@@ -226,8 +223,6 @@ async def put_mass_grades_group(current_user: Annotated[User,Depends(get_current
                         stud_grade.grade=grade_student
                         stud_grade.teacher=current_user
                         stud_grade.save()
-
-
 
                     for_answer["Студент"] = student_name.full_name
                     for_answer["Оценка"] = grade_student  
@@ -293,9 +288,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 
 @app.get("/users/me/", tags=["Пользователи"])
-async def read_users_me(
-    current_user: Annotated[User, Depends(get_current_active_user)]
-):
+async def read_users_me(current_user: Annotated[User, Depends(get_current_active_user)]):
     with db:
         try:
             if current_user.role.name == "Студент":
@@ -306,5 +299,5 @@ async def read_users_me(
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
-                detail=f"Ошибка при получении данных пользователя: {exc}") from exc
-
+                detail=f"Ошибка при получении данных пользователя: {exc}"
+                ) from exc
