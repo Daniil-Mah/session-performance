@@ -16,9 +16,9 @@ async def verify_jwt_token(token: str) -> User:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         username: str = payload.get("sub")
         if not username:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            raise HTTPException(status_code=401, detail="Что-то с токеном")
         return User.get(User.username == username)
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Неверный токен")
     except User.DoesNotExist:
         raise HTTPException(status_code=401, detail="User not found")
