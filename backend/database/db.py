@@ -52,7 +52,7 @@ class Group(BaseModel):
     name = peewee.CharField(unique=True)
 
 
-class StudentProfile(BaseModel):
+class Student(BaseModel):
     user = peewee.ForeignKeyField(User, unique=True)
     group = peewee.ForeignKeyField(Group)
     
@@ -65,7 +65,7 @@ class SessionPeriod(BaseModel):
 
 
 class Grade(BaseModel):
-    student = peewee.ForeignKeyField(StudentProfile)
+    student = peewee.ForeignKeyField(Student)
     discipline = peewee.ForeignKeyField(Disciplines)
     session = peewee.ForeignKeyField(SessionPeriod)
     grade = peewee.IntegerField(null=True)
@@ -78,7 +78,7 @@ def create_tables():
     with db:
         db.create_tables([
             Role, User, Disciplines, Group, 
-            StudentProfile, SessionPeriod, Grade,Admin,Teacher
+            Student, SessionPeriod, Grade,Admin,Teacher
         ])
 
 
@@ -160,15 +160,15 @@ def create_test():
     )
     session.save()
    
-    profile1 = StudentProfile.create(user=student1, group=group1)
-    profile2 = StudentProfile.create(user=student2, group=group1) 
-    profile3 = StudentProfile.create(user=student3, group=group1)
-    profile4 = StudentProfile.create(user=student4, group=group1)
-    profile5 = StudentProfile.create(user=student5, group=group1)
-    profile6 = StudentProfile.create(user=student6, group=group2)
-    profile7 = StudentProfile.create(user=student7, group=group2)
-    profile8 = StudentProfile.create(user=student8, group=group2)
-    profile9 = StudentProfile.create(user=student9, group=group2)
+    profile1 = Student.create(user=student1, group=group1)
+    profile2 = Student.create(user=student2, group=group1) 
+    profile3 = Student.create(user=student3, group=group1)
+    profile4 = Student.create(user=student4, group=group1)
+    profile5 = Student.create(user=student5, group=group1)
+    profile6 = Student.create(user=student6, group=group2)
+    profile7 = Student.create(user=student7, group=group2)
+    profile8 = Student.create(user=student8, group=group2)
+    profile9 = Student.create(user=student9, group=group2)
     
     Teacher.create(user=teacher_user1, discipline=math)
     Teacher.create(user=teacher_user2, discipline=russian)

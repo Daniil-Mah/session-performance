@@ -2,20 +2,17 @@ from pydantic import BaseModel, Field
 from typing import Annotated
 
 
-
 class Token(BaseModel):
     access_token: str
     token_type: str
 
 
-class TokenData(BaseModel):
-    username: str | None = None
-
-
-class TeacherInfo(BaseModel):
+class TeacherOnlyName(BaseModel):
     last_name: str
     first_name: str
     middle_name: str
+
+class TeacherInfo(TeacherOnlyName):
     password: str
 
 
