@@ -48,7 +48,7 @@ h1 {
     width: 100%;
     max-width: 200px;}
 
-@media (max-width: 768px) {
+@media (max-width: 770px) {
     .group-row {
         flex-wrap: wrap;}
     .group-item {
